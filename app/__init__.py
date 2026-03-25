@@ -1,0 +1,3 @@
+"""
+DocuSense - FastAPI Application Package
+"""

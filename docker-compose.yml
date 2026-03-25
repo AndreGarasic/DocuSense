@@ -1,0 +1,48 @@
+# DocuSense - Docker Compose Configuration
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docusense-api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=DocuSense API
+      - APP_VERSION=0.1.0
+      - DEBUG=false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - docusense-network
+
+  # Development service with hot reload
+  api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: docusense-api-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=DocuSense API (Dev)
+      - APP_VERSION=0.1.0-dev
+      - DEBUG=true
+    volumes:
+      - ./app:/app/app:ro
+    restart: unless-stopped
+    networks:
+      - docusense-network
+    profiles:
+      - dev
+
+networks:
+  docusense-network:
+    driver: bridge

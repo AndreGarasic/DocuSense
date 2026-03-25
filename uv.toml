@@ -1,0 +1,11 @@
+# UV configuration file
+# UV-specific settings only - project config goes in pyproject.toml
+
+# Use preview features
+preview = true
+
+# Cache settings
+# cache-dir = ".uv-cache"
+
+# Python version preference
+python-preference = "managed"
