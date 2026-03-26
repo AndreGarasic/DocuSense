@@ -77,3 +77,9 @@ Thumbs.db
 
 # UV
 .uv-cache/
+
+# Uploads directory (contains user uploaded files)
+uploads/
+
+# Alembic
+alembic/versions/*.pyc

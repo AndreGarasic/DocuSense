@@ -3,7 +3,7 @@ DocuSense - API v1 Router
 """
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, items
+from app.api.v1.endpoints import health, items, upload
 
 api_router = APIRouter()
 
@@ -12,3 +12,6 @@ api_router.include_router(health.router, prefix="/health", tags=["Health"])
 
 # Include items endpoints
 api_router.include_router(items.router, prefix="/items", tags=["Items"])
+
+# Include upload endpoints
+api_router.include_router(upload.router)

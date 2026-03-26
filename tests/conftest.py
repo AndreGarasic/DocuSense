@@ -3,6 +3,7 @@ DocuSense - Test Configuration and Fixtures
 """
 import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
@@ -14,6 +15,17 @@ def client():
         yield test_client
 
 
+@pytest.fixture
+async def async_client():
+    """Create an async test client for the FastAPI application."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        yield ac
+
+
+# Alias for backward compatibility
 @pytest.fixture
 def sample_item():
     """Sample item data for testing."""

@@ -11,6 +11,10 @@
 !uv.toml
 !app/
 !app/**
+!alembic.ini
+!alembic/
+!alembic/**
+!README.md
 
 # But ignore these in app
 app/__pycache__/
