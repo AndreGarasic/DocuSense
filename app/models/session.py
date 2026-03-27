@@ -48,5 +48,10 @@ class Session(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def document_count(self) -> int:
+        """Get the number of documents in this session."""
+        return len(self.documents) if self.documents else 0
+
     def __repr__(self) -> str:
         return f"<Session(id={self.id}, created_at={self.created_at})>"

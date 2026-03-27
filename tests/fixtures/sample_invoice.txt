@@ -1,0 +1,49 @@
+INVOICE
+========================================
+
+Invoice Number: INV-2024-001234
+Invoice Date: January 15, 2024
+Due Date: February 15, 2024
+
+From:
+TechCorp Solutions Inc.
+123 Business Avenue
+San Francisco, CA 94102
+
+Bill To:
+Acme Corporation
+456 Enterprise Street
+New York, NY 10001
+
+----------------------------------------
+ITEMS
+----------------------------------------
+
+1. Software Development Services
+   Quantity: 40 hours
+   Rate: $150.00/hour
+   Amount: $6,000.00
+
+2. Cloud Infrastructure Setup
+   Quantity: 1
+   Rate: $2,500.00
+   Amount: $2,500.00
+
+3. Technical Consultation
+   Quantity: 8 hours
+   Rate: $200.00/hour
+   Amount: $1,600.00
+
+----------------------------------------
+
+Subtotal: $10,100.00
+Tax (8.5%): $858.50
+
+TOTAL AMOUNT DUE: $10,958.50
+
+----------------------------------------
+
+Payment Terms: Net 30
+Payment Method: Bank Transfer or Check
+
+Thank you for your business!

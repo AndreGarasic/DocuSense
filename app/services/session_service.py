@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.session import Session
 
@@ -27,11 +28,20 @@ class SessionService:
         await self.db.refresh(session)
         return session
 
-    async def get_session(self, session_id: str) -> Session | None:
-        """Get a session by ID."""
-        result = await self.db.execute(
-            select(Session).where(Session.id == session_id)
-        )
+    async def get_session(
+        self, session_id: str, load_documents: bool = True
+    ) -> Session | None:
+        """
+        Get a session by ID.
+        
+        Args:
+            session_id: The session ID to look up
+            load_documents: Whether to eagerly load documents (needed for document_count)
+        """
+        query = select(Session).where(Session.id == session_id)
+        if load_documents:
+            query = query.options(selectinload(Session.documents))
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_or_create_session(

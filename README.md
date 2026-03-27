@@ -1,6 +1,6 @@
 # DocuSense API
 
-A FastAPI REST API application for document management with semantic search capabilities, powered by PostgreSQL + pgvector.
+A FastAPI REST API application for document management with semantic search and question-answering capabilities, powered by PostgreSQL + pgvector.
 
 ## Features
 
@@ -8,7 +8,11 @@ A FastAPI REST API application for document management with semantic search capa
 - **PostgreSQL + pgvector** - Relational database with vector similarity search
 - **SQLAlchemy** - Async ORM for database operations
 - **Sentence Transformers** - Local embedding generation for semantic search
+- **Text Extraction** - Extract text from PDFs (PyMuPDF) and images (EasyOCR)
+- **Question Answering** - Answer questions about documents using DistilBERT QA
 - **Session-based Document Management** - Upload and retrieve documents by session
+- **Rate Limiting** - Configurable rate limiting with slowapi
+- **Response Caching** - TTL-based caching for QA responses
 - **Swagger UI** - Interactive API documentation at `/docs`
 - **ReDoc** - Alternative API documentation at `/redoc`
 - **Docker Support** - Production and development Dockerfiles
@@ -35,6 +39,16 @@ A FastAPI REST API application for document management with semantic search capa
 │    - file_path                  │                               │
 │    - content_type               │                               │
 └─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      ML Model Pipeline                          │
+├─────────────────────────────────────────────────────────────────┤
+│  TEXT EXTRACTION                │  QUESTION ANSWERING           │
+│  ────────────────               │  ──────────────────           │
+│  • PyMuPDF (PDFs)               │  • DistilBERT QA Pipeline     │
+│  • EasyOCR (Images/Scans)       │  • Semantic Chunk Retrieval   │
+│  • Encoding Fallback (Text)     │  • TTL Response Caching       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -50,9 +64,11 @@ DocuSense/
 │   │       └── endpoints/
 │   │           ├── health.py    # Health check endpoints
 │   │           ├── items.py     # Items CRUD endpoints
-│   │           └── upload.py    # Document upload endpoints
+│   │           ├── upload.py    # Document upload endpoints
+│   │           └── qa.py        # Question-answering endpoints
 │   ├── core/
-│   │   └── config.py            # Application configuration
+│   │   ├── config.py            # Application configuration
+│   │   └── rate_limiter.py      # Rate limiting configuration
 │   ├── db/
 │   │   ├── __init__.py
 │   │   ├── base.py              # SQLAlchemy base model
@@ -66,12 +82,16 @@ DocuSense/
 │   │   ├── __init__.py
 │   │   ├── item.py              # Item schemas
 │   │   ├── session.py           # Session schemas
-│   │   └── document.py          # Document schemas
+│   │   ├── document.py          # Document schemas
+│   │   └── qa.py                # QA request/response schemas
 │   └── services/
 │       ├── __init__.py
 │       ├── session_service.py   # Session business logic
 │       ├── document_service.py  # Document business logic
-│       └── embedding_service.py # Embedding generation
+│       ├── embedding_service.py # Embedding generation
+│       ├── model_loader.py      # ML model lifecycle management
+│       ├── text_extraction_service.py  # Text extraction from files
+│       └── qa_service.py        # Question-answering service
 ├── alembic/
 │   ├── env.py                   # Alembic environment
 │   ├── script.py.mako           # Migration template
@@ -80,10 +100,17 @@ DocuSense/
 │   └── init-db.sql              # Database initialization
 ├── tests/
 │   ├── conftest.py              # Pytest fixtures
+│   ├── fixtures/                # Test documents
+│   │   ├── sample_document.txt
+│   │   ├── sample_invoice.txt
+│   │   └── sample_contract.txt
 │   ├── test_main.py
 │   ├── test_health.py
 │   ├── test_items.py
-│   └── test_upload.py           # Upload endpoint tests
+│   ├── test_upload.py
+│   ├── test_text_extraction.py
+│   ├── test_qa_service.py
+│   └── test_qa_endpoint.py
 ├── uploads/                     # Document storage (gitignored)
 ├── Dockerfile
 ├── Dockerfile.dev
@@ -170,6 +197,13 @@ docker-compose --profile dev up api-dev db --build
 | DELETE | `/api/v1/upload/{id}` | Delete document |
 | POST | `/api/v1/upload/session` | Create a new session |
 
+### Question Answering (v1)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/qa` | Ask a question about uploaded documents |
+| GET | `/api/v1/qa/status` | Get QA service status |
+| DELETE | `/api/v1/qa/cache` | Clear the QA answer cache |
+
 ### Items (v1)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -197,6 +231,30 @@ curl -X POST "http://localhost:8000/api/v1/upload" \
 curl -X POST "http://localhost:8000/api/v1/upload" \
   -H "X-Session-ID: your-session-id" \
   -F "files=@document.txt"
+
+# Upload an image for OCR
+curl -X POST "http://localhost:8000/api/v1/upload" \
+  -H "X-Session-ID: your-session-id" \
+  -F "files=@scanned_receipt.png"
+```
+
+### Ask Questions
+
+```bash
+# Ask a question about uploaded documents
+curl -X POST "http://localhost:8000/api/v1/qa" \
+  -H "Content-Type: application/json" \
+  -H "X-Session-ID: your-session-id" \
+  -d '{"question": "What is the total amount?"}'
+
+# Ask about specific documents
+curl -X POST "http://localhost:8000/api/v1/qa" \
+  -H "Content-Type: application/json" \
+  -H "X-Session-ID: your-session-id" \
+  -d '{"question": "Who are the parties in this contract?", "document_ids": [1, 2]}'
+
+# Check QA service status
+curl -X GET "http://localhost:8000/api/v1/qa/status"
 ```
 
 ### List Documents
@@ -222,7 +280,10 @@ uv run pytest
 uv run pytest --cov=app --cov-report=html
 
 # Run specific test file
-uv run pytest tests/test_upload.py -v
+uv run pytest tests/test_qa_service.py -v
+
+# Run text extraction tests
+uv run pytest tests/test_text_extraction.py -v
 ```
 
 ## Database Migrations
@@ -252,13 +313,41 @@ uv run alembic downgrade -1
 | `MAX_FILE_SIZE` | 52428800 | Max upload size (50MB) |
 | `EMBEDDING_MODEL` | all-MiniLM-L6-v2 | Sentence transformer model |
 | `EMBEDDING_DIMENSION` | 384 | Embedding vector dimension |
+| `OCR_USE_GPU` | false | Enable GPU for OCR |
+| `OCR_LANGUAGES` | en | OCR language codes |
+| `QA_MODEL_NAME` | distilbert-base-cased-distilled-squad | QA model |
+| `QA_MAX_CONTEXT_LENGTH` | 512 | Max context tokens for QA |
+| `QA_TOP_K_CHUNKS` | 5 | Number of chunks to retrieve |
+| `RATE_LIMIT_ENABLED` | true | Enable rate limiting |
+| `RATE_LIMIT_REQUESTS_PER_MINUTE` | 30 | Rate limit threshold |
+| `CACHE_TTL_SECONDS` | 3600 | Cache TTL (1 hour) |
+| `CACHE_MAX_SIZE` | 1000 | Max cached responses |
 
 ## Supported File Types
 
+### Documents
 - `.txt` - Plain text
 - `.md` - Markdown
-- `.pdf` - PDF documents (extraction coming soon)
+- `.pdf` - PDF documents (with OCR fallback for scanned pages)
 - `.doc` / `.docx` - Word documents (extraction coming soon)
+
+### Images (OCR)
+- `.png` - PNG images
+- `.jpg` / `.jpeg` - JPEG images
+- `.tiff` - TIFF images
+- `.bmp` - Bitmap images
+
+## ML Models
+
+### Text Extraction
+- **PyMuPDF** - Fast PDF text extraction
+- **EasyOCR** - OCR for images and scanned documents
+
+### Embeddings
+- **all-MiniLM-L6-v2** - Sentence transformer for semantic search (384 dimensions)
+
+### Question Answering
+- **distilbert-base-cased-distilled-squad** - DistilBERT fine-tuned on SQuAD
 
 ## License
 

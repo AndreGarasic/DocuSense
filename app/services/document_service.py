@@ -3,7 +3,6 @@ DocuSense - Document Service
 """
 import hashlib
 import logging
-import os
 import re
 import uuid
 from pathlib import Path
@@ -18,6 +17,7 @@ from app.core.config import get_settings
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.services.embedding_service import EmbeddingService
+from app.services.text_extraction_service import get_text_extraction_service
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -56,26 +56,19 @@ class DocumentService:
         return sha256_hash.hexdigest()
 
     async def _extract_text(self, file_path: Path, content_type: str | None) -> str:
-        """Extract text content from a file."""
-        # For now, support plain text files
-        # TODO: Add PDF, DOCX extraction with appropriate libraries
-        text_types = {"text/plain", "text/markdown", "application/octet-stream"}
-        text_extensions = {".txt", ".md", ".text", ".markdown"}
-
-        ext = file_path.suffix.lower()
-
-        if content_type in text_types or ext in text_extensions:
-            try:
-                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                    return await f.read()
-            except UnicodeDecodeError:
-                # Try with different encoding
-                async with aiofiles.open(file_path, "r", encoding="latin-1") as f:
-                    return await f.read()
-
-        # For unsupported types, return empty string
-        logger.warning(f"Text extraction not supported for {content_type} ({ext})")
-        return ""
+        """
+        Extract text content from a file using TextExtractionService.
+        
+        Supports PDFs (with OCR fallback for scanned pages), images, and text files.
+        Returns empty string if extraction fails (graceful degradation).
+        """
+        try:
+            extraction_service = get_text_extraction_service()
+            text = await extraction_service.extract_text(file_path, content_type)
+            return text
+        except Exception as e:
+            logger.error(f"Text extraction failed for {file_path}: {e}")
+            return ""
 
     def _split_text_into_chunks(self, text: str) -> list[str]:
         """Split text into overlapping chunks."""

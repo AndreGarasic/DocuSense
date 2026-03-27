@@ -4,7 +4,7 @@
 # Stage 1: Build stage
 FROM python:3.12-slim as builder
 
-# Install build dependencies for sentence-transformers
+# Install build dependencies for sentence-transformers, PyMuPDF, and EasyOCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -24,11 +24,22 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Stage 2: Runtime stage
 FROM python:3.12-slim as runtime
 
+# Install runtime dependencies for EasyOCR and image processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    # Disable tokenizers parallelism warning
+    TOKENIZERS_PARALLELISM=false
 
 # Create non-root user for security
 RUN groupadd --gid 1000 appgroup && \
@@ -37,8 +48,9 @@ RUN groupadd --gid 1000 appgroup && \
 # Set working directory
 WORKDIR /app
 
-# Create uploads directory
-RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app/uploads
+# Create uploads directory and model cache directory
+RUN mkdir -p /app/uploads /home/appuser/.cache && \
+    chown -R appuser:appgroup /app/uploads /home/appuser/.cache
 
 # Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv

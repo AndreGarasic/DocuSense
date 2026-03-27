@@ -46,7 +46,7 @@ class TestUploadEndpoint:
     @pytest.mark.asyncio
     async def test_upload_invalid_extension_returns_415(self, async_client: AsyncClient):
         """Test that uploading unsupported file type returns 415."""
-        files = {"files": ("test.exe", io.BytesIO(b"malicious content"), "application/octet-stream")}
+        files = {"file": ("test.exe", io.BytesIO(b"malicious content"), "application/octet-stream")}
         response = await async_client.post("/api/v1/upload", files=files)
         assert response.status_code == status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
 
