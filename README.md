@@ -57,7 +57,7 @@ docker-compose up --build
 docker-compose --profile dev up api-dev db --build
 ```
 
-### Running Locally
+### Running Locally (API only, Docker for DB)
 
 1. **Start PostgreSQL with pgvector:**
    ```bash
@@ -68,6 +68,97 @@ docker-compose --profile dev up api-dev db --build
    ```bash
    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
+
+### Running Fully Local (No Docker)
+
+If you want to run everything without Docker, you'll need to install PostgreSQL with the pgvector extension manually.
+
+#### 1. Install PostgreSQL 16+
+
+**Windows:**
+- Download from [PostgreSQL Downloads](https://www.postgresql.org/download/windows/)
+- Or use Chocolatey: `choco install postgresql16`
+
+**macOS:**
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install postgresql-16 postgresql-contrib-16
+sudo systemctl start postgresql
+```
+
+#### 2. Install pgvector Extension
+
+**Windows:**
+- Download prebuilt binaries from [pgvector releases](https://github.com/pgvector/pgvector/releases)
+- Or build from source (requires Visual Studio Build Tools)
+
+**macOS:**
+```bash
+brew install pgvector
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install postgresql-16-pgvector
+```
+
+**From source (any platform):**
+```bash
+git clone https://github.com/pgvector/pgvector.git
+cd pgvector
+make
+make install  # may require sudo
+```
+
+#### 3. Create Database and User
+
+```bash
+# Connect to PostgreSQL as superuser
+psql -U postgres
+
+# In psql, run:
+CREATE USER docusense WITH PASSWORD 'docusense';
+CREATE DATABASE docusense OWNER docusense;
+GRANT ALL PRIVILEGES ON DATABASE docusense TO docusense;
+\q
+```
+
+#### 4. Initialize Database Schema
+
+Use the provided initialization script:
+
+```bash
+# Connect to the docusense database and run the init script
+psql -U docusense -d docusense -f scripts/init-db.sql
+```
+
+This script will:
+- Enable the `pgvector` extension (`CREATE EXTENSION IF NOT EXISTS vector;`)
+- Create the `sessions`, `documents`, and `document_chunks` tables
+- Set up indexes including the vector similarity search index
+
+#### 5. Configure Environment
+
+```bash
+cp .env.example .env
+```
+
+Ensure your `.env` has the correct `DATABASE_URL` for local PostgreSQL:
+```
+DATABASE_URL=postgresql+asyncpg://docusense:docusense@localhost:5432/docusense
+```
+
+#### 6. Run the API
+
+```bash
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
 ### Accessing the API
 
@@ -113,62 +204,17 @@ docker-compose --profile dev up api-dev db --build
 | PUT | `/api/v1/items/{id}` | Update item |
 | DELETE | `/api/v1/items/{id}` | Delete item |
 
-## Usage Examples
+## Usage
 
-### Upload Documents
+The easiest way to explore and test the API is through the interactive **Swagger UI** at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-```bash
-# Upload a single file (creates new session)
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -F "files=@document.txt"
+Swagger UI provides:
+- Interactive documentation for all endpoints
+- Built-in request builder with parameter validation
+- One-click "Try it out" functionality
+- Response examples and schemas
 
-# Upload multiple files
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -F "files=@doc1.txt" \
-  -F "files=@doc2.pdf"
-
-# Upload to existing session
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -H "X-Session-ID: your-session-id" \
-  -F "files=@document.txt"
-
-# Upload an image for OCR
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -H "X-Session-ID: your-session-id" \
-  -F "files=@scanned_receipt.png"
-```
-
-### Ask Questions
-
-```bash
-# Ask a question about uploaded documents
-curl -X POST "http://localhost:8000/api/v1/asl" \
-  -H "Content-Type: application/json" \
-  -H "X-Session-ID: your-session-id" \
-  -d '{"question": "What is the total amount?"}'
-
-# Ask about specific documents
-curl -X POST "http://localhost:8000/api/v1/asl" \
-  -H "Content-Type: application/json" \
-  -H "X-Session-ID: your-session-id" \
-  -d '{"question": "Who are the parties in this contract?", "document_ids": [1, 2]}'
-
-# Check QA service status
-curl -X GET "http://localhost:8000/api/v1/asl/status"
-```
-
-### List Documents
-
-```bash
-curl -X GET "http://localhost:8000/api/v1/upload" \
-  -H "X-Session-ID: your-session-id"
-```
-
-### Create Session
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/upload/session?expires_in_hours=48"
-```
+Alternatively, use **ReDoc** at [http://localhost:8000/redoc](http://localhost:8000/redoc) for a clean, readable API reference.
 
 ## Testing
 
