@@ -32,27 +32,6 @@ async def async_client():
         yield ac
 
 
-# Alias for backward compatibility
-@pytest.fixture
-def sample_item():
-    """Sample item data for testing."""
-    return {
-        "name": "Test Item",
-        "description": "A test item description",
-        "price": 29.99,
-        "is_active": True,
-    }
-
-
-@pytest.fixture
-def sample_item_update():
-    """Sample item update data for testing."""
-    return {
-        "name": "Updated Item",
-        "price": 39.99,
-    }
-
-
 # ============================================
 # QA Testing Fixtures
 # ============================================

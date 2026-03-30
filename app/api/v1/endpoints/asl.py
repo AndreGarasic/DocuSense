@@ -1,5 +1,5 @@
 """
-DocuSense - QA Endpoints
+DocuSense - ASL Endpoints
 
 Question-Answering API endpoints with rate limiting.
 """
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 limiter = get_limiter()
 
-router = APIRouter(prefix="/qa", tags=["Question Answering"])
+router = APIRouter(prefix="/asl", tags=["Question Answering"])
 
 
 @router.post(

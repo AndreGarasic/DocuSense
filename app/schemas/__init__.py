@@ -1,7 +1,6 @@
 """
 DocuSense - Pydantic Schemas
 """
-from app.schemas.item import Item, ItemCreate
 from app.schemas.session import SessionCreate, SessionResponse
 from app.schemas.document import (
     DocumentCreate,
@@ -11,8 +10,6 @@ from app.schemas.document import (
 )
 
 __all__ = [
-    "Item",
-    "ItemCreate",
     "SessionCreate",
     "SessionResponse",
     "DocumentCreate",

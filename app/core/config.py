@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     app_name: str = "DocuSense API"
     app_version: str = "0.1.0"
-    app_description: str = "A FastAPI REST API application for document management"
+    app_description: str = "A FastAPI REST API application for document insight"
     debug: bool = False
     api_prefix: str = "/api/v1"
 

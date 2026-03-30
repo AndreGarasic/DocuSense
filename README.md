@@ -20,106 +20,6 @@ A FastAPI REST API application for document management with semantic search and 
 - **Pytest** - Comprehensive unit testing
 - **Alembic** - Database migrations
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    PostgreSQL + pgvector                        │
-├─────────────────────────────────────────────────────────────────┤
-│  RELATIONAL TABLES              │  VECTOR-ENABLED TABLE         │
-│  ─────────────────              │  ────────────────────         │
-│  • sessions                     │  • document_chunks            │
-│    - id (UUID)                  │    - id                       │
-│    - created_at                 │    - document_id (FK)         │
-│    - expires_at                 │    - chunk_index              │
-│  • documents                    │    - content (text)           │
-│    - id                         │    - embedding (vector(384))  │
-│    - session_id (FK)            │    - metadata (jsonb)         │
-│    - filename                   │                               │
-│    - file_path                  │                               │
-│    - content_type               │                               │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                      ML Model Pipeline                          │
-├─────────────────────────────────────────────────────────────────┤
-│  TEXT EXTRACTION                │  QUESTION ANSWERING           │
-│  ────────────────               │  ──────────────────           │
-│  • PyMuPDF (PDFs)               │  • DistilBERT QA Pipeline     │
-│  • EasyOCR (Images/Scans)       │  • Semantic Chunk Retrieval   │
-│  • Encoding Fallback (Text)     │  • TTL Response Caching       │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Project Structure
-
-```
-DocuSense/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                  # FastAPI application entry point
-│   ├── api/
-│   │   └── v1/
-│   │       ├── router.py        # API v1 router
-│   │       └── endpoints/
-│   │           ├── health.py    # Health check endpoints
-│   │           ├── items.py     # Items CRUD endpoints
-│   │           ├── upload.py    # Document upload endpoints
-│   │           └── qa.py        # Question-answering endpoints
-│   ├── core/
-│   │   ├── config.py            # Application configuration
-│   │   └── rate_limiter.py      # Rate limiting configuration
-│   ├── db/
-│   │   ├── __init__.py
-│   │   ├── base.py              # SQLAlchemy base model
-│   │   └── session.py           # Database session management
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── session.py           # Session model
-│   │   ├── document.py          # Document model
-│   │   └── document_chunk.py    # Document chunk model with vectors
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── item.py              # Item schemas
-│   │   ├── session.py           # Session schemas
-│   │   ├── document.py          # Document schemas
-│   │   └── qa.py                # QA request/response schemas
-│   └── services/
-│       ├── __init__.py
-│       ├── session_service.py   # Session business logic
-│       ├── document_service.py  # Document business logic
-│       ├── embedding_service.py # Embedding generation
-│       ├── model_loader.py      # ML model lifecycle management
-│       ├── text_extraction_service.py  # Text extraction from files
-│       └── qa_service.py        # Question-answering service
-├── alembic/
-│   ├── env.py                   # Alembic environment
-│   ├── script.py.mako           # Migration template
-│   └── versions/                # Migration files
-├── scripts/
-│   └── init-db.sql              # Database initialization
-├── tests/
-│   ├── conftest.py              # Pytest fixtures
-│   ├── fixtures/                # Test documents
-│   │   ├── sample_document.txt
-│   │   ├── sample_invoice.txt
-│   │   └── sample_contract.txt
-│   ├── test_main.py
-│   ├── test_health.py
-│   ├── test_items.py
-│   ├── test_upload.py
-│   ├── test_text_extraction.py
-│   ├── test_qa_service.py
-│   └── test_qa_endpoint.py
-├── uploads/                     # Document storage (gitignored)
-├── Dockerfile
-├── Dockerfile.dev
-├── docker-compose.yml
-├── pyproject.toml
-├── alembic.ini
-└── .env.example
-```
-
 ## Quick Start
 
 ### Prerequisites
@@ -200,9 +100,9 @@ docker-compose --profile dev up api-dev db --build
 ### Question Answering (v1)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/qa` | Ask a question about uploaded documents |
-| GET | `/api/v1/qa/status` | Get QA service status |
-| DELETE | `/api/v1/qa/cache` | Clear the QA answer cache |
+| POST | `/api/v1/asl` | Ask a question about uploaded documents |
+| GET | `/api/v1/asl/status` | Get QA service status |
+| DELETE | `/api/v1/asl/cache` | Clear the QA answer cache |
 
 ### Items (v1)
 | Method | Endpoint | Description |
@@ -242,19 +142,19 @@ curl -X POST "http://localhost:8000/api/v1/upload" \
 
 ```bash
 # Ask a question about uploaded documents
-curl -X POST "http://localhost:8000/api/v1/qa" \
+curl -X POST "http://localhost:8000/api/v1/asl" \
   -H "Content-Type: application/json" \
   -H "X-Session-ID: your-session-id" \
   -d '{"question": "What is the total amount?"}'
 
 # Ask about specific documents
-curl -X POST "http://localhost:8000/api/v1/qa" \
+curl -X POST "http://localhost:8000/api/v1/asl" \
   -H "Content-Type: application/json" \
   -H "X-Session-ID: your-session-id" \
   -d '{"question": "Who are the parties in this contract?", "document_ids": [1, 2]}'
 
 # Check QA service status
-curl -X GET "http://localhost:8000/api/v1/qa/status"
+curl -X GET "http://localhost:8000/api/v1/asl/status"
 ```
 
 ### List Documents
