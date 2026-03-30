@@ -1,0 +1,23 @@
+# Ignore everything
+*
+
+# Except these files
+!.dockerignore
+!Dockerfile
+!Dockerfile.dev
+!docker-compose.yml
+!pyproject.toml
+!uv.lock
+!uv.toml
+!app/
+!app/**
+!alembic.ini
+!alembic/
+!alembic/**
+!README.md
+
+# But ignore these in app
+app/__pycache__/
+app/**/__pycache__/
+app/*.pyc
+app/**/*.pyc

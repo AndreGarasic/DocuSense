@@ -1,0 +1,42 @@
+DocuSense Test Document
+=======================
+
+This is a sample text document for testing the DocuSense QA system.
+
+Company Information
+-------------------
+Company Name: Innovative Tech Corp
+Founded: 2015
+Headquarters: Seattle, Washington
+CEO: Michael Johnson
+Number of Employees: 450
+
+Product Overview
+----------------
+Our flagship product, DataSync Pro, is an enterprise data synchronization
+platform that enables real-time data replication across multiple cloud
+providers. Key features include:
+
+- Real-time synchronization with sub-second latency
+- Support for AWS, Azure, and Google Cloud
+- End-to-end encryption using AES-256
+- Automatic conflict resolution
+- 99.99% uptime SLA
+
+Pricing Information
+-------------------
+- Starter Plan: $99/month (up to 100GB)
+- Professional Plan: $299/month (up to 1TB)
+- Enterprise Plan: $999/month (unlimited)
+- Custom pricing available for large deployments
+
+Contact Information
+-------------------
+Sales: sales@innovativetech.example.com
+Support: support@innovativetech.example.com
+Phone: 1-800-555-0123
+
+This document contains information that can be used to test question-answering
+capabilities. Questions like "What is the company name?", "Who is the CEO?",
+"What is the price of the Professional Plan?" should be answerable from this
+document.

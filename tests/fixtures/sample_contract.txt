@@ -1,0 +1,53 @@
+SERVICE AGREEMENT CONTRACT
+========================================
+
+Contract Number: SA-2024-00567
+Effective Date: March 1, 2024
+Expiration Date: February 28, 2025
+
+PARTIES
+----------------------------------------
+
+This Service Agreement ("Agreement") is entered into by and between:
+
+Provider: DataTech Solutions LLC
+Address: 789 Innovation Drive, Austin, TX 78701
+
+AND
+
+Client: Global Enterprises Inc.
+Address: 321 Corporate Plaza, Chicago, IL 60601
+
+TERMS AND CONDITIONS
+----------------------------------------
+
+1. SCOPE OF SERVICES
+The Provider agrees to deliver data analytics and consulting
+services as outlined in Exhibit A attached hereto.
+
+2. PAYMENT TERMS
+- Monthly retainer fee: $15,000.00
+- Payment due within 15 days of invoice date
+- Late payment penalty: 1.5% per month
+
+3. TERM AND TERMINATION
+- Initial term: 12 months
+- Auto-renewal for successive 12-month periods
+- Either party may terminate with 60 days written notice
+
+4. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality of all
+proprietary information exchanged during this engagement.
+
+5. LIABILITY
+Maximum liability shall not exceed the total fees paid under
+this Agreement in the preceding 12 months.
+
+SIGNATURES
+----------------------------------------
+
+Provider Representative: John Smith, CEO
+Date: February 15, 2024
+
+Client Representative: Jane Doe, VP Operations
+Date: February 20, 2024

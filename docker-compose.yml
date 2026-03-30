@@ -1,0 +1,83 @@
+# DocuSense - Docker Compose Configuration
+services:
+  # PostgreSQL with pgvector extension
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: docusense-db
+    environment:
+      POSTGRES_USER: docusense
+      POSTGRES_PASSWORD: docusense
+      POSTGRES_DB: docusense
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docusense -d docusense"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - docusense-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docusense-api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=DocuSense API
+      - APP_VERSION=0.1.0
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://docusense:docusense@db:5432/docusense
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - docusense-network
+
+  # Development service with hot reload
+  api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: docusense-api-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=DocuSense API (Dev)
+      - APP_VERSION=0.1.0-dev
+      - DEBUG=true
+      - DATABASE_URL=postgresql+asyncpg://docusense:docusense@db:5432/docusense
+    volumes:
+      - ./app:/app/app:ro
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - docusense-network
+    profiles:
+      - dev
+
+networks:
+  docusense-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  uploads_data:
