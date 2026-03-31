@@ -189,11 +189,11 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | POST | `/api/v1/upload/session` | Create a new session |
 
 ### Question Answering (v1)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/asl` | Ask a question about uploaded documents |
-| GET | `/api/v1/asl/status` | Get QA service status |
-| DELETE | `/api/v1/asl/cache` | Clear the QA answer cache |
+| Method | Endpoint             | Description |
+|--------|----------------------|-------------|
+| POST | `/api/v1/ask`        | Ask a question about uploaded documents |
+| GET | `/api/v1/ask/status` | Get QA service status |
+| DELETE | `/api/v1/ask/cache`  | Clear the QA answer cache |
 
 ### Items (v1)
 | Method | Endpoint | Description |

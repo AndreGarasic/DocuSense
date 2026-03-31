@@ -1,5 +1,5 @@
 """
-DocuSense - ASL Endpoints
+DocuSense - ASK Endpoints
 
 Question-Answering API endpoints with rate limiting.
 """
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 limiter = get_limiter()
 
-router = APIRouter(prefix="/asl", tags=["Question Answering"])
+router = APIRouter(prefix="/ask", tags=["Question Answering"])
 
 
 @router.post(

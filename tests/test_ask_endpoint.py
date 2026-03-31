@@ -1,7 +1,7 @@
 """
-DocuSense - ASL Endpoint Integration Tests
+DocuSense - ask Endpoint Integration Tests
 
-Integration tests for the ASL API endpoints.
+Integration tests for the ask API endpoints.
 """
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,7 +22,7 @@ def client():
 @pytest.fixture
 def mock_session_service():
     """Mock the session service."""
-    with patch("app.api.v1.endpoints.asl.SessionService") as mock:
+    with patch("app.api.v1.endpoints.ask.SessionService") as mock:
         mock_instance = MagicMock()
         mock.return_value = mock_instance
         yield mock_instance
@@ -31,7 +31,7 @@ def mock_session_service():
 @pytest.fixture
 def mock_qa_service():
     """Mock the QA service."""
-    with patch("app.api.v1.endpoints.asl.QAService") as mock:
+    with patch("app.api.v1.endpoints.ask.QAService") as mock:
         mock_instance = MagicMock()
         mock.return_value = mock_instance
         yield mock_instance
@@ -40,20 +40,20 @@ def mock_qa_service():
 @pytest.fixture
 def mock_model_loader():
     """Mock the model loader."""
-    with patch("app.api.v1.endpoints.asl.get_model_loader") as mock:
+    with patch("app.api.v1.endpoints.ask.get_model_loader") as mock:
         mock_instance = MagicMock()
         mock_instance.qa_available = True
         mock.return_value = mock_instance
         yield mock_instance
 
 
-class TestASLEndpoint:
-    """Tests for POST /api/v1/asl endpoint."""
+class TestaskEndpoint:
+    """Tests for POST /api/v1/ask endpoint."""
 
     def test_ask_question_missing_session_header(self, client):
         """Test that missing X-Session-ID header returns 422."""
         response = client.post(
-            "/api/v1/asl",
+            "/api/v1/ask",
             json={"question": "What is the total amount?"},
         )
         
@@ -62,7 +62,7 @@ class TestASLEndpoint:
     def test_ask_question_empty_question(self, client):
         """Test that empty question returns 422."""
         response = client.post(
-            "/api/v1/asl",
+            "/api/v1/ask",
             json={"question": ""},
             headers={"X-Session-ID": "test-session"},
         )
@@ -72,7 +72,7 @@ class TestASLEndpoint:
     def test_ask_question_short_question(self, client):
         """Test that too short question returns 422."""
         response = client.post(
-            "/api/v1/asl",
+            "/api/v1/ask",
             json={"question": "Hi"},  # Less than 3 characters
             headers={"X-Session-ID": "test-session"},
         )
@@ -86,7 +86,7 @@ class TestASLEndpoint:
         mock_session_service.get_session = AsyncMock(return_value=None)
         
         response = client.post(
-            "/api/v1/asl",
+            "/api/v1/ask",
             json={"question": "What is the total amount?"},
             headers={"X-Session-ID": "nonexistent-session"},
         )
@@ -103,7 +103,7 @@ class TestASLEndpoint:
         mock_session_service.get_session = AsyncMock(return_value=mock_session)
         
         response = client.post(
-            "/api/v1/asl",
+            "/api/v1/ask",
             json={"question": "What is the total amount?"},
             headers={"X-Session-ID": "empty-session"},
         )
@@ -119,13 +119,13 @@ class TestASLEndpoint:
         mock_session.document_count = 5
         mock_session_service.get_session = AsyncMock(return_value=mock_session)
         
-        with patch("app.api.v1.endpoints.asl.get_model_loader") as mock_loader:
+        with patch("app.api.v1.endpoints.ask.get_model_loader") as mock_loader:
             mock_instance = MagicMock()
             mock_instance.qa_available = False
             mock_loader.return_value = mock_instance
             
             response = client.post(
-                "/api/v1/asl",
+                "/api/v1/ask",
                 json={"question": "What is the total amount?"},
                 headers={"X-Session-ID": "test-session"},
             )
@@ -150,7 +150,7 @@ class TestASLEndpoint:
         mock_qa_service.answer_question = AsyncMock(return_value=mock_response)
         
         response = client.post(
-            "/api/v1/asl",
+            "/api/v1/ask",
             json={"question": "What is the total amount?"},
             headers={"X-Session-ID": "test-session"},
         )
@@ -177,7 +177,7 @@ class TestASLEndpoint:
         mock_qa_service.answer_question = AsyncMock(return_value=mock_response)
         
         response = client.post(
-            "/api/v1/asl",
+            "/api/v1/ask",
             json={
                 "question": "What is the total amount?",
                 "document_ids": [1, 2, 3],
@@ -188,15 +188,15 @@ class TestASLEndpoint:
         assert response.status_code == 200
 
 
-class TestASLCacheEndpoint:
-    """Tests for DELETE /api/v1/asl/cache endpoint."""
+class TestaskCacheEndpoint:
+    """Tests for DELETE /api/v1/ask/cache endpoint."""
 
     def test_clear_cache(self, client):
         """Test clearing the QA cache."""
-        with patch("app.api.v1.endpoints.asl.QAService") as mock_service:
+        with patch("app.api.v1.endpoints.ask.QAService") as mock_service:
             mock_service.clear_cache.return_value = 5
             
-            response = client.delete("/api/v1/asl/cache")
+            response = client.delete("/api/v1/ask/cache")
             
             assert response.status_code == 200
             data = response.json()
@@ -204,17 +204,17 @@ class TestASLCacheEndpoint:
             assert data["entries_cleared"] == 5
 
 
-class TestASLStatusEndpoint:
-    """Tests for GET /api/v1/asl/status endpoint."""
+class TestaskStatusEndpoint:
+    """Tests for GET /api/v1/ask/status endpoint."""
 
     def test_get_status_available(self, client, mock_model_loader):
         """Test getting QA status when available."""
         mock_model_loader.qa_available = True
         
-        with patch("app.api.v1.endpoints.asl.QAService") as mock_service:
+        with patch("app.api.v1.endpoints.ask.QAService") as mock_service:
             mock_service.get_cache_size.return_value = 10
             
-            response = client.get("/api/v1/asl/status")
+            response = client.get("/api/v1/ask/status")
             
             assert response.status_code == 200
             data = response.json()
@@ -224,15 +224,15 @@ class TestASLStatusEndpoint:
 
     def test_get_status_unavailable(self, client):
         """Test getting QA status when unavailable."""
-        with patch("app.api.v1.endpoints.asl.get_model_loader") as mock_loader:
+        with patch("app.api.v1.endpoints.ask.get_model_loader") as mock_loader:
             mock_instance = MagicMock()
             mock_instance.qa_available = False
             mock_loader.return_value = mock_instance
             
-            with patch("app.api.v1.endpoints.asl.QAService") as mock_service:
+            with patch("app.api.v1.endpoints.ask.QAService") as mock_service:
                 mock_service.get_cache_size.return_value = 0
                 
-                response = client.get("/api/v1/asl/status")
+                response = client.get("/api/v1/ask/status")
                 
                 assert response.status_code == 200
                 data = response.json()
@@ -240,7 +240,7 @@ class TestASLStatusEndpoint:
 
 
 class TestRateLimiting:
-    """Tests for rate limiting on ASL endpoint."""
+    """Tests for rate limiting on ask endpoint."""
 
     def test_rate_limit_exceeded(self, client, mock_session_service, mock_model_loader):
         """Test that rate limiting returns 429 after threshold."""
@@ -255,7 +255,7 @@ class TestRateLimiting:
         # In a real test environment, you would configure a very low rate limit
         # or mock the rate limiter
         
-        with patch("app.api.v1.endpoints.asl.limiter") as mock_limiter:
+        with patch("app.api.v1.endpoints.ask.limiter") as mock_limiter:
             # Simulate rate limit exceeded
             from slowapi.errors import RateLimitExceeded
             

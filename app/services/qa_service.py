@@ -239,7 +239,7 @@ class QAService:
                     filename=document.original_filename,
                     chunk_index=chunk.chunk_index,
                     content_preview=content_preview,
-                    similarity_score=round(similarity, 4),
+                    similarity_score=round(max(0.0, similarity), 4),
                 )
             )
 

@@ -3,7 +3,7 @@ DocuSense - API v1 Router
 """
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, items, asl, upload
+from app.api.v1.endpoints import health, ask, upload
 
 api_router = APIRouter()
 
