@@ -218,6 +218,35 @@ Alternatively, use **ReDoc** at [http://localhost:8000/redoc](http://localhost:8
 
 ## Testing
 
+### Uploading a Document
+
+Use the Swagger UI to upload documents via the `/api/v1/upload` endpoint:
+
+![Uploading a document via Swagger UI](docs/images/upload-document.png)
+
+The upload endpoint:
+1. Accepts one or more files (PDF, images, text files)
+2. Returns a `session_id` for tracking your documents
+3. Automatically extracts text (with OCR for scanned documents)
+4. Chunks and embeds the content for semantic search
+
+Use the returned `session_id` in the `X-Session-ID` header for subsequent requests.
+
+### Asking a Question
+
+Use the Swagger UI to ask questions about your documents via the `/api/v1/ask` endpoint:
+
+![Asking a question via Swagger UI](docs/images/ask-question.png)
+
+The ask endpoint:
+1. Requires the `session_id` obtained during document upload
+2. Optionally accepts specific `document_ids` to narrow the search scope
+3. Uses semantic search to find relevant document chunks
+4. Generates an answer using the configured LLM (or extractive QA as fallback)
+5. Returns the answer with confidence score and source references
+
+### Running Unit Tests
+
 ```bash
 # Run all tests
 uv run pytest
@@ -292,8 +321,68 @@ uv run alembic downgrade -1
 ### Embeddings
 - **all-MiniLM-L6-v2** - Sentence transformer for semantic search (384 dimensions)
 
-### Question Answering
-- **distilbert-base-cased-distilled-squad** - DistilBERT fine-tuned on SQuAD
+### Question Answering (Hybrid RAG)
+
+DocuSense supports two QA modes:
+
+1. **Generative RAG** (recommended) - Uses LLMs for natural language answers
+   - **Ollama** - Local LLM inference (Mistral, Llama, etc.)
+   - **OpenAI** - Cloud-based GPT models
+
+2. **Extractive QA** (legacy) - Extracts answer spans from context
+   - **distilbert-base-cased-distilled-squad** - DistilBERT fine-tuned on SQuAD
+
+The system automatically falls back to extractive QA if the LLM is unavailable.
+
+## Hybrid RAG Configuration
+
+### Using Ollama (Local LLM - Default)
+
+1. **Install Ollama:**
+   ```bash
+   # macOS/Linux
+   curl -fsSL https://ollama.com/install.sh | sh
+   
+   # Windows - download from https://ollama.com/download
+   ```
+
+2. **Pull a model:**
+   ```bash
+   ollama pull mistral
+   # Or other models: llama3, phi3, gemma2, etc.
+   ```
+
+3. **Configure environment:**
+   ```bash
+   LLM_PROVIDER=ollama
+   LLM_MODEL=mistral
+   LLM_BASE_URL=http://localhost:11434
+   ```
+
+### Using OpenAI
+
+1. **Install OpenAI dependency:**
+   ```bash
+   uv sync --extra openai
+   ```
+
+2. **Configure environment:**
+   ```bash
+   LLM_PROVIDER=openai
+   LLM_MODEL=gpt-3.5-turbo
+   OPENAI_API_KEY=sk-your-api-key
+   ```
+
+### LLM Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | ollama | LLM provider: `ollama`, `openai`, or `extractive` (legacy) |
+| `LLM_MODEL` | mistral | Model name for the provider |
+| `LLM_BASE_URL` | http://localhost:11434 | Ollama API base URL |
+| `OPENAI_API_KEY` | - | OpenAI API key (required for openai provider) |
+| `LLM_TEMPERATURE` | 0.1 | Generation temperature (0-1) |
+| `LLM_MAX_TOKENS` | 500 | Max tokens for generated answer |
 
 ## License
 

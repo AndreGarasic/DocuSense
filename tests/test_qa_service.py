@@ -20,10 +20,13 @@ def mock_db():
 
 @pytest.fixture
 def mock_model_loader():
-    """Create a mock model loader with QA pipeline."""
+    """Create a mock model loader with QA pipeline (extractive mode)."""
     with patch("app.services.qa_service.get_model_loader") as mock_loader:
         mock_instance = MagicMock()
         mock_instance.qa_available = True
+        mock_instance.llm_available = False  # Use extractive QA by default
+        mock_instance.llm_client = None
+        mock_instance.llm_provider = "extractive"
         mock_instance.qa_pipeline = MagicMock()
         mock_instance.qa_pipeline.return_value = {
             "answer": "Test answer",
@@ -139,10 +142,11 @@ class TestQAServiceAnswerQuestion:
 
     @pytest.mark.asyncio
     async def test_answer_question_qa_unavailable(self, mock_db):
-        """Test answer_question when QA model is unavailable."""
+        """Test answer_question when both LLM and QA model are unavailable."""
         with patch("app.services.qa_service.get_model_loader") as mock_loader:
             mock_instance = MagicMock()
             mock_instance.qa_available = False
+            mock_instance.llm_available = False  # Both unavailable
             mock_loader.return_value = mock_instance
             
             service = QAService(mock_db)
@@ -329,3 +333,134 @@ class TestQAServiceRunQAModel:
         )
         
         assert "couldn't find" in answer.lower()
+
+
+class TestQAServiceGenerativeMode:
+    """Tests for generative RAG mode."""
+
+    @pytest.fixture
+    def mock_llm_model_loader(self, mock_db):
+        """Create a mock model loader with LLM client (generative mode)."""
+        with patch("app.services.qa_service.get_model_loader") as mock_loader:
+            mock_instance = MagicMock()
+            mock_instance.qa_available = True
+            mock_instance.llm_available = True
+            mock_instance.llm_provider = "ollama"
+            
+            # Mock LLM client
+            mock_llm_client = AsyncMock()
+            mock_llm_client.generate = AsyncMock(return_value="Generated answer from LLM")
+            mock_instance.llm_client = mock_llm_client
+            
+            mock_loader.return_value = mock_instance
+            yield mock_instance
+
+    @pytest.mark.asyncio
+    async def test_run_generative_qa_success(self, mock_db, mock_llm_model_loader):
+        """Test successful generative QA execution."""
+        QAService.clear_cache()
+        service = QAService(mock_db)
+        
+        answer, confidence = await service._run_generative_qa(
+            "What is the total?", "The total amount is $100."
+        )
+        
+        assert answer == "Generated answer from LLM"
+        assert 0.0 < confidence <= 1.0
+        mock_llm_model_loader.llm_client.generate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_qa_model_uses_llm_when_available(self, mock_db, mock_llm_model_loader):
+        """Test that _run_qa_model uses LLM when available."""
+        QAService.clear_cache()
+        service = QAService(mock_db)
+        
+        answer, confidence = await service._run_qa_model(
+            "What is the total?", "The total is $100."
+        )
+        
+        assert answer == "Generated answer from LLM"
+        mock_llm_model_loader.llm_client.generate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generative_qa_fallback_on_error(self, mock_db):
+        """Test that generative QA falls back to extractive on error."""
+        with patch("app.services.qa_service.get_model_loader") as mock_loader:
+            mock_instance = MagicMock()
+            mock_instance.qa_available = True
+            mock_instance.llm_available = True
+            mock_instance.llm_provider = "ollama"
+            
+            # Mock LLM client that raises an error
+            mock_llm_client = AsyncMock()
+            mock_llm_client.generate = AsyncMock(side_effect=Exception("LLM error"))
+            mock_instance.llm_client = mock_llm_client
+            
+            # Mock extractive QA pipeline
+            mock_instance.qa_pipeline = MagicMock()
+            mock_instance.qa_pipeline.return_value = {
+                "answer": "Extractive fallback answer",
+                "score": 0.75,
+            }
+            
+            mock_loader.return_value = mock_instance
+            
+            QAService.clear_cache()
+            service = QAService(mock_db)
+            
+            answer, confidence = await service._run_qa_model(
+                "What is the total?", "The total is $100."
+            )
+            
+            # Should fall back to extractive QA
+            assert answer == "Extractive fallback answer"
+            assert confidence == 0.75
+
+
+class TestConfidenceEstimation:
+    """Tests for generative confidence estimation."""
+
+    @pytest.fixture
+    def qa_service_for_confidence(self, mock_db, mock_model_loader):
+        """Create a QAService for confidence tests."""
+        QAService.clear_cache()
+        return QAService(mock_db)
+
+    def test_estimate_confidence_normal_answer(self, qa_service_for_confidence):
+        """Test confidence estimation for a normal answer."""
+        confidence = qa_service_for_confidence._estimate_generative_confidence(
+            "The total amount is $100.00",
+            "The invoice shows a total amount of $100.00 for services rendered."
+        )
+        
+        assert 0.5 < confidence <= 0.95
+
+    def test_estimate_confidence_short_answer(self, qa_service_for_confidence):
+        """Test confidence estimation for a very short answer."""
+        confidence = qa_service_for_confidence._estimate_generative_confidence(
+            "Yes",
+            "The document confirms the payment was received."
+        )
+        
+        # Short answers should have lower confidence
+        assert confidence < 0.7
+
+    def test_estimate_confidence_uncertainty_phrase(self, qa_service_for_confidence):
+        """Test confidence estimation when answer contains uncertainty."""
+        confidence = qa_service_for_confidence._estimate_generative_confidence(
+            "I'm not sure, but it might be $100.",
+            "The total is $100."
+        )
+        
+        # Uncertainty phrases should lower confidence
+        assert confidence < 0.5
+
+    def test_estimate_confidence_no_information(self, qa_service_for_confidence):
+        """Test confidence estimation when answer indicates no information."""
+        confidence = qa_service_for_confidence._estimate_generative_confidence(
+            "The context doesn't contain information about the CEO.",
+            "The company was founded in 2020."
+        )
+        
+        # "doesn't contain" should lower confidence
+        assert confidence < 0.5
