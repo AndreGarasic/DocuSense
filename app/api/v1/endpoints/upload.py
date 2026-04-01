@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile,
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.security import User, get_current_active_user
 from app.db.session import get_db
 from app.schemas.document import (
     DocumentListResponse,
@@ -49,10 +50,11 @@ def validate_file(file: UploadFile) -> None:
     response_model=DocumentUploadResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload documents",
-    description="Upload one or more documents. Returns a session ID for retrieval.",
+    description="Upload one or more documents. Returns a session ID for retrieval. **Requires authentication.**",
 )
 async def upload_documents(
     file: UploadFile,
+    current_user: Annotated[User, Depends(get_current_active_user)],
     db: AsyncSession = Depends(get_db),
     x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
 ) -> DocumentUploadResponse:
@@ -100,6 +102,8 @@ async def upload_documents(
         for doc in documents
     ]
 
+    logger.info(f"User '{current_user.username}' uploaded {len(documents)} document(s)")
+
     return DocumentUploadResponse(
         message=f"Successfully uploaded {len(documents)} document(s)",
         session_id=session.id,
@@ -112,9 +116,10 @@ async def upload_documents(
     "",
     response_model=DocumentListResponse,
     summary="List documents",
-    description="List all documents for a session.",
+    description="List all documents for a session. **Requires authentication.**",
 )
 async def list_documents(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     x_session_id: Annotated[str, Header(alias="X-Session-ID")],
 ) -> DocumentListResponse:
@@ -160,10 +165,11 @@ async def list_documents(
     "/{document_id}",
     response_model=DocumentResponse,
     summary="Get document",
-    description="Get a specific document by ID.",
+    description="Get a specific document by ID. **Requires authentication.**",
 )
 async def get_document(
     document_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     x_session_id: Annotated[str, Header(alias="X-Session-ID")],
 ) -> DocumentResponse:
@@ -207,10 +213,11 @@ async def get_document(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete document",
-    description="Delete a specific document by ID.",
+    description="Delete a specific document by ID. **Requires authentication.**",
 )
 async def delete_document(
     document_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     x_session_id: Annotated[str, Header(alias="X-Session-ID")],
 ) -> None:
@@ -238,15 +245,18 @@ async def delete_document(
             detail="Document not found",
         )
 
+    logger.info(f"User '{current_user.username}' deleted document {document_id}")
+
 
 @router.post(
     "/session",
     response_model=SessionResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create session",
-    description="Create a new session for document uploads.",
+    description="Create a new session for document uploads. **Requires authentication.**",
 )
 async def create_session(
+    current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     expires_in_hours: int = 24,
 ) -> SessionResponse:
@@ -257,6 +267,8 @@ async def create_session(
     """
     session_service = SessionService(db)
     session = await session_service.create_session(expires_in_hours)
+
+    logger.info(f"User '{current_user.username}' created session {session.id}")
 
     return SessionResponse(
         id=session.id,

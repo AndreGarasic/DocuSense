@@ -22,6 +22,54 @@ services:
     networks:
       - docusense-network
 
+  # Ollama for local LLM inference
+  ollama:
+    image: ollama/ollama:latest
+    container_name: docusense-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - docusense-network
+    # Uncomment for GPU support (NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Ollama model puller - pulls the model on startup
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: docusense-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for Ollama to be ready..."
+        sleep 5
+        echo "Pulling mistral model..."
+        ollama pull mistral
+        echo "Model pull complete!"
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    networks:
+      - docusense-network
+    profiles:
+      - setup
+
   api:
     build:
       context: .
@@ -34,10 +82,18 @@ services:
       - APP_VERSION=0.1.0
       - DEBUG=false
       - DATABASE_URL=postgresql+asyncpg://docusense:docusense@db:5432/docusense
+      # LLM Configuration - uses Ollama by default
+      - LLM_PROVIDER=ollama
+      - LLM_MODEL=mistral
+      - LLM_BASE_URL=http://ollama:11434
+      - LLM_TEMPERATURE=0.1
+      - LLM_MAX_TOKENS=500
     volumes:
       - uploads_data:/app/uploads
     depends_on:
       db:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/health')"]
@@ -62,17 +118,54 @@ services:
       - APP_VERSION=0.1.0-dev
       - DEBUG=true
       - DATABASE_URL=postgresql+asyncpg://docusense:docusense@db:5432/docusense
+      # LLM Configuration
+      - LLM_PROVIDER=ollama
+      - LLM_MODEL=mistral
+      - LLM_BASE_URL=http://ollama:11434
     volumes:
       - ./app:/app/app:ro
       - ./uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - docusense-network
     profiles:
       - dev
+
+  # API without LLM (extractive QA only)
+  api-extractive:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docusense-api-extractive
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=DocuSense API (Extractive)
+      - APP_VERSION=0.1.0
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://docusense:docusense@db:5432/docusense
+      - LLM_PROVIDER=extractive
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - docusense-network
+    profiles:
+      - extractive
 
 networks:
   docusense-network:
@@ -81,3 +174,4 @@ networks:
 volumes:
   postgres_data:
   uploads_data:
+  ollama_data:

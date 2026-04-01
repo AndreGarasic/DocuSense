@@ -20,106 +20,6 @@ A FastAPI REST API application for document management with semantic search and 
 - **Pytest** - Comprehensive unit testing
 - **Alembic** - Database migrations
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    PostgreSQL + pgvector                        │
-├─────────────────────────────────────────────────────────────────┤
-│  RELATIONAL TABLES              │  VECTOR-ENABLED TABLE         │
-│  ─────────────────              │  ────────────────────         │
-│  • sessions                     │  • document_chunks            │
-│    - id (UUID)                  │    - id                       │
-│    - created_at                 │    - document_id (FK)         │
-│    - expires_at                 │    - chunk_index              │
-│  • documents                    │    - content (text)           │
-│    - id                         │    - embedding (vector(384))  │
-│    - session_id (FK)            │    - metadata (jsonb)         │
-│    - filename                   │                               │
-│    - file_path                  │                               │
-│    - content_type               │                               │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                      ML Model Pipeline                          │
-├─────────────────────────────────────────────────────────────────┤
-│  TEXT EXTRACTION                │  QUESTION ANSWERING           │
-│  ────────────────               │  ──────────────────           │
-│  • PyMuPDF (PDFs)               │  • DistilBERT QA Pipeline     │
-│  • EasyOCR (Images/Scans)       │  • Semantic Chunk Retrieval   │
-│  • Encoding Fallback (Text)     │  • TTL Response Caching       │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Project Structure
-
-```
-DocuSense/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                  # FastAPI application entry point
-│   ├── api/
-│   │   └── v1/
-│   │       ├── router.py        # API v1 router
-│   │       └── endpoints/
-│   │           ├── health.py    # Health check endpoints
-│   │           ├── items.py     # Items CRUD endpoints
-│   │           ├── upload.py    # Document upload endpoints
-│   │           └── qa.py        # Question-answering endpoints
-│   ├── core/
-│   │   ├── config.py            # Application configuration
-│   │   └── rate_limiter.py      # Rate limiting configuration
-│   ├── db/
-│   │   ├── __init__.py
-│   │   ├── base.py              # SQLAlchemy base model
-│   │   └── session.py           # Database session management
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── session.py           # Session model
-│   │   ├── document.py          # Document model
-│   │   └── document_chunk.py    # Document chunk model with vectors
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── item.py              # Item schemas
-│   │   ├── session.py           # Session schemas
-│   │   ├── document.py          # Document schemas
-│   │   └── qa.py                # QA request/response schemas
-│   └── services/
-│       ├── __init__.py
-│       ├── session_service.py   # Session business logic
-│       ├── document_service.py  # Document business logic
-│       ├── embedding_service.py # Embedding generation
-│       ├── model_loader.py      # ML model lifecycle management
-│       ├── text_extraction_service.py  # Text extraction from files
-│       └── qa_service.py        # Question-answering service
-├── alembic/
-│   ├── env.py                   # Alembic environment
-│   ├── script.py.mako           # Migration template
-│   └── versions/                # Migration files
-├── scripts/
-│   └── init-db.sql              # Database initialization
-├── tests/
-│   ├── conftest.py              # Pytest fixtures
-│   ├── fixtures/                # Test documents
-│   │   ├── sample_document.txt
-│   │   ├── sample_invoice.txt
-│   │   └── sample_contract.txt
-│   ├── test_main.py
-│   ├── test_health.py
-│   ├── test_items.py
-│   ├── test_upload.py
-│   ├── test_text_extraction.py
-│   ├── test_qa_service.py
-│   └── test_qa_endpoint.py
-├── uploads/                     # Document storage (gitignored)
-├── Dockerfile
-├── Dockerfile.dev
-├── docker-compose.yml
-├── pyproject.toml
-├── alembic.ini
-└── .env.example
-```
-
 ## Quick Start
 
 ### Prerequisites
@@ -157,7 +57,7 @@ docker-compose up --build
 docker-compose --profile dev up api-dev db --build
 ```
 
-### Running Locally
+### Running Locally (API only, Docker for DB)
 
 1. **Start PostgreSQL with pgvector:**
    ```bash
@@ -168,6 +68,97 @@ docker-compose --profile dev up api-dev db --build
    ```bash
    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
+
+### Running Fully Local (No Docker)
+
+If you want to run everything without Docker, you'll need to install PostgreSQL with the pgvector extension manually.
+
+#### 1. Install PostgreSQL 16+
+
+**Windows:**
+- Download from [PostgreSQL Downloads](https://www.postgresql.org/download/windows/)
+- Or use Chocolatey: `choco install postgresql16`
+
+**macOS:**
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install postgresql-16 postgresql-contrib-16
+sudo systemctl start postgresql
+```
+
+#### 2. Install pgvector Extension
+
+**Windows:**
+- Download prebuilt binaries from [pgvector releases](https://github.com/pgvector/pgvector/releases)
+- Or build from source (requires Visual Studio Build Tools)
+
+**macOS:**
+```bash
+brew install pgvector
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install postgresql-16-pgvector
+```
+
+**From source (any platform):**
+```bash
+git clone https://github.com/pgvector/pgvector.git
+cd pgvector
+make
+make install  # may require sudo
+```
+
+#### 3. Create Database and User
+
+```bash
+# Connect to PostgreSQL as superuser
+psql -U postgres
+
+# In psql, run:
+CREATE USER docusense WITH PASSWORD 'docusense';
+CREATE DATABASE docusense OWNER docusense;
+GRANT ALL PRIVILEGES ON DATABASE docusense TO docusense;
+\q
+```
+
+#### 4. Initialize Database Schema
+
+Use the provided initialization script:
+
+```bash
+# Connect to the docusense database and run the init script
+psql -U docusense -d docusense -f scripts/init-db.sql
+```
+
+This script will:
+- Enable the `pgvector` extension (`CREATE EXTENSION IF NOT EXISTS vector;`)
+- Create the `sessions`, `documents`, and `document_chunks` tables
+- Set up indexes including the vector similarity search index
+
+#### 5. Configure Environment
+
+```bash
+cp .env.example .env
+```
+
+Ensure your `.env` has the correct `DATABASE_URL` for local PostgreSQL:
+```
+DATABASE_URL=postgresql+asyncpg://docusense:docusense@localhost:5432/docusense
+```
+
+#### 6. Run the API
+
+```bash
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
 ### Accessing the API
 
@@ -181,6 +172,13 @@ docker-compose --profile dev up api-dev db --build
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/` | API information |
+
+### Authentication (v1)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/auth/token` | Login and get JWT access token |
+| GET | `/api/v1/auth/me` | Get current authenticated user |
+| GET | `/api/v1/auth/verify` | Verify token validity |
 
 ### Health (v1)
 | Method | Endpoint | Description |
@@ -198,11 +196,11 @@ docker-compose --profile dev up api-dev db --build
 | POST | `/api/v1/upload/session` | Create a new session |
 
 ### Question Answering (v1)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/qa` | Ask a question about uploaded documents |
-| GET | `/api/v1/qa/status` | Get QA service status |
-| DELETE | `/api/v1/qa/cache` | Clear the QA answer cache |
+| Method | Endpoint             | Description |
+|--------|----------------------|-------------|
+| POST | `/api/v1/ask`        | Ask a question about uploaded documents |
+| GET | `/api/v1/ask/status` | Get QA service status |
+| DELETE | `/api/v1/ask/cache`  | Clear the QA answer cache |
 
 ### Items (v1)
 | Method | Endpoint | Description |
@@ -213,64 +211,48 @@ docker-compose --profile dev up api-dev db --build
 | PUT | `/api/v1/items/{id}` | Update item |
 | DELETE | `/api/v1/items/{id}` | Delete item |
 
-## Usage Examples
+## Usage
 
-### Upload Documents
+The easiest way to explore and test the API is through the interactive **Swagger UI** at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-```bash
-# Upload a single file (creates new session)
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -F "files=@document.txt"
+Swagger UI provides:
+- Interactive documentation for all endpoints
+- Built-in request builder with parameter validation
+- One-click "Try it out" functionality
+- Response examples and schemas
 
-# Upload multiple files
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -F "files=@doc1.txt" \
-  -F "files=@doc2.pdf"
-
-# Upload to existing session
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -H "X-Session-ID: your-session-id" \
-  -F "files=@document.txt"
-
-# Upload an image for OCR
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -H "X-Session-ID: your-session-id" \
-  -F "files=@scanned_receipt.png"
-```
-
-### Ask Questions
-
-```bash
-# Ask a question about uploaded documents
-curl -X POST "http://localhost:8000/api/v1/qa" \
-  -H "Content-Type: application/json" \
-  -H "X-Session-ID: your-session-id" \
-  -d '{"question": "What is the total amount?"}'
-
-# Ask about specific documents
-curl -X POST "http://localhost:8000/api/v1/qa" \
-  -H "Content-Type: application/json" \
-  -H "X-Session-ID: your-session-id" \
-  -d '{"question": "Who are the parties in this contract?", "document_ids": [1, 2]}'
-
-# Check QA service status
-curl -X GET "http://localhost:8000/api/v1/qa/status"
-```
-
-### List Documents
-
-```bash
-curl -X GET "http://localhost:8000/api/v1/upload" \
-  -H "X-Session-ID: your-session-id"
-```
-
-### Create Session
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/upload/session?expires_in_hours=48"
-```
+Alternatively, use **ReDoc** at [http://localhost:8000/redoc](http://localhost:8000/redoc) for a clean, readable API reference.
 
 ## Testing
+
+### Uploading a Document
+
+Use the Swagger UI to upload documents via the `/api/v1/upload` endpoint:
+
+![Uploading a document via Swagger UI](docs/images/upload-document.png)
+
+The upload endpoint:
+1. Accepts one or more files (PDF, images, text files)
+2. Returns a `session_id` for tracking your documents
+3. Automatically extracts text (with OCR for scanned documents)
+4. Chunks and embeds the content for semantic search
+
+Use the returned `session_id` in the `X-Session-ID` header for subsequent requests.
+
+### Asking a Question
+
+Use the Swagger UI to ask questions about your documents via the `/api/v1/ask` endpoint:
+
+![Asking a question via Swagger UI](docs/images/ask-question.png)
+
+The ask endpoint:
+1. Requires the `session_id` obtained during document upload
+2. Optionally accepts specific `document_ids` to narrow the search scope
+3. Uses semantic search to find relevant document chunks
+4. Generates an answer using the configured LLM (or extractive QA as fallback)
+5. Returns the answer with confidence score and source references
+
+### Running Unit Tests
 
 ```bash
 # Run all tests
@@ -298,6 +280,78 @@ uv run alembic upgrade head
 # Rollback one migration
 uv run alembic downgrade -1
 ```
+
+## JWT Authentication
+
+DocuSense includes JWT-based authentication for protecting API endpoints.
+
+### Demo Credentials
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `admin123` | admin |
+| `user` | `user123` | user |
+
+### Using Authentication in Swagger UI
+
+1. Navigate to http://localhost:8000/docs
+2. Click the **"Authorize"** button (🔓 icon at top-right)
+3. Enter credentials (e.g., `admin` / `admin123`)
+4. Click **"Authorize"**
+5. All protected endpoints will now include the JWT token automatically
+
+### Programmatic Authentication
+
+```bash
+# Get a token
+curl -X POST "http://localhost:8000/api/v1/auth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin&password=admin123"
+
+# Use the token
+curl -X GET "http://localhost:8000/api/v1/auth/me" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+### Protected Endpoints
+
+All API endpoints (except health checks) require authentication:
+
+| Endpoint | Auth Required | Role |
+|----------|---------------|------|
+| `GET /` | No | - |
+| `GET /api/v1/health/*` | No | - |
+| `POST /api/v1/auth/token` | No | - |
+| `GET /api/v1/auth/me` | Yes | Any |
+| `GET /api/v1/auth/verify` | Yes | Any |
+| `POST /api/v1/upload` | Yes | Any |
+| `GET /api/v1/upload` | Yes | Any |
+| `GET /api/v1/upload/{id}` | Yes | Any |
+| `DELETE /api/v1/upload/{id}` | Yes | Any |
+| `POST /api/v1/upload/session` | Yes | Any |
+| `POST /api/v1/ask` | Yes | Any |
+| `GET /api/v1/ask/status` | Yes | Any |
+| `DELETE /api/v1/ask/cache` | Yes | **Admin** |
+
+To protect additional endpoints, add the `get_current_active_user` dependency:
+
+```python
+from app.core.security import User, get_current_active_user
+
+@router.get("/protected")
+async def protected_endpoint(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    return {"user": current_user.username}
+```
+
+### JWT Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JWT_SECRET_KEY` | (change in production) | Secret key for signing tokens |
+| `JWT_ALGORITHM` | HS256 | JWT signing algorithm |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | 30 | Token expiration time |
 
 ## Environment Variables
 
@@ -346,8 +400,68 @@ uv run alembic downgrade -1
 ### Embeddings
 - **all-MiniLM-L6-v2** - Sentence transformer for semantic search (384 dimensions)
 
-### Question Answering
-- **distilbert-base-cased-distilled-squad** - DistilBERT fine-tuned on SQuAD
+### Question Answering (Hybrid RAG)
+
+DocuSense supports two QA modes:
+
+1. **Generative RAG** (recommended) - Uses LLMs for natural language answers
+   - **Ollama** - Local LLM inference (Mistral, Llama, etc.)
+   - **OpenAI** - Cloud-based GPT models
+
+2. **Extractive QA** (legacy) - Extracts answer spans from context
+   - **distilbert-base-cased-distilled-squad** - DistilBERT fine-tuned on SQuAD
+
+The system automatically falls back to extractive QA if the LLM is unavailable.
+
+## Hybrid RAG Configuration
+
+### Using Ollama (Local LLM - Default)
+
+1. **Install Ollama:**
+   ```bash
+   # macOS/Linux
+   curl -fsSL https://ollama.com/install.sh | sh
+   
+   # Windows - download from https://ollama.com/download
+   ```
+
+2. **Pull a model:**
+   ```bash
+   ollama pull mistral
+   # Or other models: llama3, phi3, gemma2, etc.
+   ```
+
+3. **Configure environment:**
+   ```bash
+   LLM_PROVIDER=ollama
+   LLM_MODEL=mistral
+   LLM_BASE_URL=http://localhost:11434
+   ```
+
+### Using OpenAI
+
+1. **Install OpenAI dependency:**
+   ```bash
+   uv sync --extra openai
+   ```
+
+2. **Configure environment:**
+   ```bash
+   LLM_PROVIDER=openai
+   LLM_MODEL=gpt-3.5-turbo
+   OPENAI_API_KEY=sk-your-api-key
+   ```
+
+### LLM Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | ollama | LLM provider: `ollama`, `openai`, or `extractive` (legacy) |
+| `LLM_MODEL` | mistral | Model name for the provider |
+| `LLM_BASE_URL` | http://localhost:11434 | Ollama API base URL |
+| `OPENAI_API_KEY` | - | OpenAI API key (required for openai provider) |
+| `LLM_TEMPERATURE` | 0.1 | Generation temperature (0-1) |
+| `LLM_MAX_TOKENS` | 500 | Max tokens for generated answer |
 
 ## License
 

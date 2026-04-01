@@ -2,12 +2,13 @@
 DocuSense - QA Service
 
 Question-Answering service with caching support.
-Uses pgvector for semantic search and DistilBERT for answer extraction.
+Uses pgvector for semantic search and supports both:
+- Extractive QA (DistilBERT) - legacy mode
+- Generative RAG (Ollama/OpenAI) - hybrid mode
 """
 import asyncio
 import hashlib
 import logging
-from typing import Any
 
 from cachetools import TTLCache
 from sqlalchemy import select
@@ -24,14 +25,27 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+# System prompt for generative RAG
+RAG_SYSTEM_PROMPT = """You are a helpful assistant that answers questions \
+based only on the provided context.
+
+Instructions:
+- Answer the question using ONLY the information from the context below
+- If the context doesn't contain enough information to answer, say so clearly
+- Be concise and direct in your answers
+- Do not make up information or use external knowledge
+- If you quote from the context, be accurate"""
+
+
 class QAService:
     """
     Question-Answering service with caching.
     
     Features:
     - Semantic search using pgvector cosine similarity
-    - Answer extraction using DistilBERT QA pipeline
+    - Hybrid QA: Generative (LLM) or Extractive (DistilBERT)
     - TTL-based caching for repeated questions
+    - Automatic fallback from LLM to extractive if LLM unavailable
     """
 
     # Class-level cache shared across instances
@@ -85,10 +99,13 @@ class QAService:
         """
         # Normalize question (lowercase, strip whitespace)
         normalized_question = question.lower().strip()
-        
+
         # Sort document IDs for consistent hashing
-        doc_ids_str = ",".join(map(str, sorted(document_ids))) if document_ids else "all"
-        
+        if document_ids:
+            doc_ids_str = ",".join(map(str, sorted(document_ids)))
+        else:
+            doc_ids_str = "all"
+
         # Create hash
         key_string = f"{session_id}:{doc_ids_str}:{normalized_question}"
         return hashlib.sha256(key_string.encode()).hexdigest()
@@ -118,9 +135,9 @@ class QAService:
             cached_response.cached = True
             return cached_response
 
-        # Check if QA model is available
-        if not self._model_loader.qa_available:
-            logger.warning("QA model not available")
+        # Check if any QA capability is available (LLM or extractive)
+        if not self._model_loader.llm_available and not self._model_loader.qa_available:
+            logger.warning("No QA capability available (neither LLM nor extractive)")
             return AnswerResponse(
                 answer="QA service is currently unavailable. Please try again later.",
                 confidence=0.0,
@@ -135,7 +152,10 @@ class QAService:
 
         if not chunks:
             return AnswerResponse(
-                answer="No relevant documents found to answer your question. Please upload documents first.",
+                answer=(
+                    "No relevant documents found to answer your question. "
+                    "Please upload documents first."
+                ),
                 confidence=0.0,
                 source_chunks=[],
                 cached=False,
@@ -232,14 +252,17 @@ class QAService:
             total_length += len(chunk_text)
 
             # Create chunk reference
-            content_preview = chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content
+            if len(chunk.content) > 200:
+                content_preview = chunk.content[:200] + "..."
+            else:
+                content_preview = chunk.content
             chunk_references.append(
                 ChunkReference(
                     document_id=document.id,
                     filename=document.original_filename,
                     chunk_index=chunk.chunk_index,
                     content_preview=content_preview,
-                    similarity_score=round(similarity, 4),
+                    similarity_score=round(max(0.0, similarity), 4),
                 )
             )
 
@@ -252,29 +275,142 @@ class QAService:
         context: str,
     ) -> tuple[str, float]:
         """
-        Run the QA model to extract an answer.
+        Run the QA model to generate/extract an answer.
+        
+        Uses generative LLM if available, falls back to extractive QA.
         
         Returns (answer, confidence) tuple.
         """
         if not context:
             return "No context available to answer the question.", 0.0
 
-        try:
-            # Run in thread pool to avoid blocking
-            result = await asyncio.to_thread(
-                self._run_qa_model_sync, question, context
-            )
-            return result
-        except Exception as e:
-            logger.error(f"Error running QA model: {e}")
-            return "An error occurred while processing your question.", 0.0
+        # Check if we should use generative LLM
+        if self._model_loader.llm_available:
+            return await self._run_generative_qa(question, context)
 
-    def _run_qa_model_sync(
+        # Fall back to extractive QA
+        logger.debug("Using extractive QA (LLM not available)")
+        return await self._run_extractive_qa(question, context)
+
+    async def _run_generative_qa(
         self,
         question: str,
         context: str,
     ) -> tuple[str, float]:
-        """Synchronous QA model execution."""
+        """
+        Run generative QA using LLM (Ollama or OpenAI).
+        
+        Returns (answer, confidence) tuple.
+        Confidence is estimated based on context relevance.
+        """
+        llm_client = self._model_loader.llm_client
+        if llm_client is None:
+            return await self._run_extractive_qa(question, context)
+
+        try:
+            # Build the prompt
+            prompt = f"""Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+
+            llm_provider = self._model_loader.llm_provider
+            logger.debug(f"Running generative QA with {llm_provider}")
+
+            # Generate answer using LLM
+            answer = await llm_client.generate(prompt, RAG_SYSTEM_PROMPT)
+
+            if not answer:
+                return "I couldn't generate an answer from the provided context.", 0.0
+
+            # For generative models, we estimate confidence based on answer quality
+            # A more sophisticated approach would use the model's log probabilities
+            confidence = self._estimate_generative_confidence(answer, context)
+
+            return answer, confidence
+
+        except Exception as e:
+            logger.error(f"Generative QA error: {e}")
+            # Fall back to extractive QA on error
+            logger.info("Falling back to extractive QA due to LLM error")
+            return await self._run_extractive_qa(question, context)
+
+    def _estimate_generative_confidence(self, answer: str, context: str) -> float:
+        """
+        Estimate confidence for generative answers.
+        
+        This is a heuristic based on:
+        - Answer length (too short or too long may indicate issues)
+        - Presence of uncertainty phrases
+        - Whether key terms from answer appear in context
+        """
+        # Base confidence
+        confidence = 0.75
+
+        # Penalize very short answers
+        if len(answer) < 10:
+            confidence -= 0.2
+
+        # Penalize very long answers (may be hallucinating)
+        if len(answer) > 1000:
+            confidence -= 0.1
+
+        # Check for uncertainty phrases
+        uncertainty_phrases = [
+            "i don't know",
+            "i'm not sure",
+            "cannot find",
+            "not mentioned",
+            "no information",
+            "doesn't contain",
+            "not enough information",
+        ]
+        answer_lower = answer.lower()
+        for phrase in uncertainty_phrases:
+            if phrase in answer_lower:
+                confidence -= 0.3
+                break
+
+        # Boost confidence if answer terms appear in context
+        answer_words = set(answer_lower.split())
+        context_lower = context.lower()
+        matching_words = sum(
+            1 for word in answer_words if len(word) > 4 and word in context_lower
+        )
+        if matching_words > 3:
+            confidence += 0.1
+
+        # Clamp confidence to valid range
+        return max(0.1, min(0.95, confidence))
+
+    async def _run_extractive_qa(
+        self,
+        question: str,
+        context: str,
+    ) -> tuple[str, float]:
+        """
+        Run extractive QA using DistilBERT.
+        
+        Returns (answer, confidence) tuple.
+        """
+        try:
+            # Run in thread pool to avoid blocking
+            result = await asyncio.to_thread(
+                self._run_extractive_qa_sync, question, context
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Error running extractive QA: {e}")
+            return "An error occurred while processing your question.", 0.0
+
+    def _run_extractive_qa_sync(
+        self,
+        question: str,
+        context: str,
+    ) -> tuple[str, float]:
+        """Synchronous extractive QA model execution."""
         qa_pipeline = self._model_loader.qa_pipeline
         if qa_pipeline is None:
             return "QA model not available.", 0.0
@@ -286,12 +422,16 @@ class QAService:
 
             # Handle empty or low-confidence answers
             if not answer or confidence < 0.01:
-                return "I couldn't find a confident answer to your question in the provided documents.", confidence
+                no_answer_msg = (
+                    "I couldn't find a confident answer to your question "
+                    "in the provided documents."
+                )
+                return no_answer_msg, confidence
 
             return answer, confidence
 
         except Exception as e:
-            logger.error(f"QA pipeline error: {e}")
+            logger.error(f"Extractive QA pipeline error: {e}")
             return "Error processing question.", 0.0
 
 

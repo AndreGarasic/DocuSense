@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     app_name: str = "DocuSense API"
     app_version: str = "0.1.0"
-    app_description: str = "A FastAPI REST API application for document management"
+    app_description: str = "A FastAPI REST API application for document insight"
     debug: bool = False
     api_prefix: str = "/api/v1"
 
@@ -39,10 +39,18 @@ class Settings(BaseSettings):
     ocr_use_gpu: bool = False
     ocr_languages: list[str] = ["en"]
 
-    # QA model settings
+    # QA model settings (extractive - legacy)
     qa_model_name: str = "distilbert/distilbert-base-cased-distilled-squad"
     qa_max_context_length: int = 512
     qa_top_k_chunks: int = 5
+
+    # LLM settings (generative RAG)
+    llm_provider: str = "ollama"  # "ollama", "openai", or "extractive" (legacy)
+    llm_model: str = "mistral"  # Model name for the provider
+    llm_base_url: str = "http://localhost:11434"  # Ollama API base URL
+    openai_api_key: str | None = None  # OpenAI API key (if using openai provider)
+    llm_temperature: float = 0.1  # Low temperature for factual answers
+    llm_max_tokens: int = 500  # Max tokens for generated answer
 
     # Rate limiting settings
     rate_limit_enabled: bool = True
@@ -51,6 +59,11 @@ class Settings(BaseSettings):
     # Caching settings
     cache_ttl_seconds: int = 3600  # 1 hour
     cache_max_size: int = 1000
+
+    # JWT Authentication settings
+    jwt_secret_key: str = "docusense-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
 
     model_config = SettingsConfigDict(
         env_file=".env",
