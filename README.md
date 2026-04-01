@@ -26,54 +26,82 @@ A FastAPI REST API application for document management with semantic search and 
 
 - Python 3.11+
 - [UV Package Manager](https://github.com/astral-sh/uv)
-- Docker & Docker Compose
-- PostgreSQL 16+ with pgvector (or use Docker)
 
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd DocuSense
-   ```
-
-2. **Install dependencies with UV:**
-   ```bash
-   uv sync --dev
-   ```
-
-3. **Copy environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-
-### Running with Docker (Recommended)
+### Clone the Repository
 
 ```bash
-# Start PostgreSQL and API
-docker-compose up --build
+git clone <repository-url>
+cd DocuSense
+```
 
-# Or run in development mode with hot reload
+### Environment Variables (Optional)
+
+The application has sensible default values for all settings, so a `.env` file is **not required** for local development. However, you can create one to customize the configuration:
+
+```bash
+cp .env.example .env
+```
+
+See the [Environment Variables](#environment-variables) section for all available options.
+
+---
+
+## Option 1: Docker Setup (Recommended)
+
+This is the easiest way to get started. Docker handles all dependencies including PostgreSQL with pgvector.
+
+### Prerequisites for Docker Setup
+
+- Docker & Docker Compose
+
+### Production Mode
+
+Start both PostgreSQL and the API with a single command:
+
+```bash
+docker-compose up --build
+```
+
+### Development Mode (with Hot Reload)
+
+For development with automatic code reloading:
+
+```bash
 docker-compose --profile dev up api-dev db --build
 ```
 
-### Running Locally (API only, Docker for DB)
+### Hybrid Mode (Docker DB + Local API)
+
+Run only the database in Docker while running the API locally for faster development iteration:
 
 1. **Start PostgreSQL with pgvector:**
    ```bash
    docker-compose up db -d
    ```
 
-2. **Run the API:**
+2. **Install Python dependencies:**
+   ```bash
+   uv sync --dev
+   ```
+
+3. **Run the API locally:**
    ```bash
    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-### Running Fully Local (No Docker)
+---
 
-If you want to run everything without Docker, you'll need to install PostgreSQL with the pgvector extension manually.
+## Option 2: Local Setup (Without Docker)
 
-#### 1. Install PostgreSQL 16+
+If you prefer to run everything locally without Docker, follow these steps to install and configure PostgreSQL with pgvector manually.
+
+### Prerequisites for Local Setup
+
+- Python 3.11+
+- [UV Package Manager](https://github.com/astral-sh/uv)
+- PostgreSQL 16+ with pgvector extension
+
+### Step 1: Install PostgreSQL 16+
 
 **Windows:**
 - Download from [PostgreSQL Downloads](https://www.postgresql.org/download/windows/)
@@ -92,7 +120,7 @@ sudo apt install postgresql-16 postgresql-contrib-16
 sudo systemctl start postgresql
 ```
 
-#### 2. Install pgvector Extension
+### Step 2: Install pgvector Extension
 
 **Windows:**
 - Download prebuilt binaries from [pgvector releases](https://github.com/pgvector/pgvector/releases)
@@ -116,7 +144,7 @@ make
 make install  # may require sudo
 ```
 
-#### 3. Create Database and User
+### Step 3: Create Database and User
 
 ```bash
 # Connect to PostgreSQL as superuser
@@ -129,7 +157,7 @@ GRANT ALL PRIVILEGES ON DATABASE docusense TO docusense;
 \q
 ```
 
-#### 4. Initialize Database Schema
+### Step 4: Initialize Database Schema
 
 Use the provided initialization script:
 
@@ -143,24 +171,28 @@ This script will:
 - Create the `sessions`, `documents`, and `document_chunks` tables
 - Set up indexes including the vector similarity search index
 
-#### 5. Configure Environment
-
-```bash
-cp .env.example .env
-```
+### Step 5: Configure Environment
 
 Ensure your `.env` has the correct `DATABASE_URL` for local PostgreSQL:
 ```
 DATABASE_URL=postgresql+asyncpg://docusense:docusense@localhost:5432/docusense
 ```
 
-#### 6. Run the API
+### Step 6: Install Python Dependencies
+
+```bash
+uv sync --dev
+```
+
+### Step 7: Run the API
 
 ```bash
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Accessing the API
+---
+
+## Accessing the API
 
 - **API Root:** http://localhost:8000
 - **Swagger UI:** http://localhost:8000/docs
