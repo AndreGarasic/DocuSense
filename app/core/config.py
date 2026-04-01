@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 3600  # 1 hour
     cache_max_size: int = 1000
 
+    # JWT Authentication settings
+    jwt_secret_key: str = "docusense-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

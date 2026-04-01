@@ -173,6 +173,13 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 |--------|----------|-------------|
 | GET | `/` | API information |
 
+### Authentication (v1)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/auth/token` | Login and get JWT access token |
+| GET | `/api/v1/auth/me` | Get current authenticated user |
+| GET | `/api/v1/auth/verify` | Verify token validity |
+
 ### Health (v1)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -273,6 +280,78 @@ uv run alembic upgrade head
 # Rollback one migration
 uv run alembic downgrade -1
 ```
+
+## JWT Authentication
+
+DocuSense includes JWT-based authentication for protecting API endpoints.
+
+### Demo Credentials
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `admin123` | admin |
+| `user` | `user123` | user |
+
+### Using Authentication in Swagger UI
+
+1. Navigate to http://localhost:8000/docs
+2. Click the **"Authorize"** button (🔓 icon at top-right)
+3. Enter credentials (e.g., `admin` / `admin123`)
+4. Click **"Authorize"**
+5. All protected endpoints will now include the JWT token automatically
+
+### Programmatic Authentication
+
+```bash
+# Get a token
+curl -X POST "http://localhost:8000/api/v1/auth/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin&password=admin123"
+
+# Use the token
+curl -X GET "http://localhost:8000/api/v1/auth/me" \
+  -H "Authorization: Bearer <your-token>"
+```
+
+### Protected Endpoints
+
+All API endpoints (except health checks) require authentication:
+
+| Endpoint | Auth Required | Role |
+|----------|---------------|------|
+| `GET /` | No | - |
+| `GET /api/v1/health/*` | No | - |
+| `POST /api/v1/auth/token` | No | - |
+| `GET /api/v1/auth/me` | Yes | Any |
+| `GET /api/v1/auth/verify` | Yes | Any |
+| `POST /api/v1/upload` | Yes | Any |
+| `GET /api/v1/upload` | Yes | Any |
+| `GET /api/v1/upload/{id}` | Yes | Any |
+| `DELETE /api/v1/upload/{id}` | Yes | Any |
+| `POST /api/v1/upload/session` | Yes | Any |
+| `POST /api/v1/ask` | Yes | Any |
+| `GET /api/v1/ask/status` | Yes | Any |
+| `DELETE /api/v1/ask/cache` | Yes | **Admin** |
+
+To protect additional endpoints, add the `get_current_active_user` dependency:
+
+```python
+from app.core.security import User, get_current_active_user
+
+@router.get("/protected")
+async def protected_endpoint(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    return {"user": current_user.username}
+```
+
+### JWT Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JWT_SECRET_KEY` | (change in production) | Secret key for signing tokens |
+| `JWT_ALGORITHM` | HS256 | JWT signing algorithm |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | 30 | Token expiration time |
 
 ## Environment Variables
 
